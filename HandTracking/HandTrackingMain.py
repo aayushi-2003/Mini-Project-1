@@ -3,7 +3,7 @@ import mediapipe as mp
 import time
 import math
 
-class HandDetector():
+class HandDetector:
     def __init__(self, mode=False, maxHands=2, modelComp=1, detectionCon = 0.5, trackCon = 0.5):
         self.mode = mode
         self.maxHands = maxHands
@@ -13,7 +13,6 @@ class HandDetector():
         self.mpHands = mp.solutions.hands
         self.hands = self.mpHands.Hands(self.mode, self.maxHands, self.modelComp, self.detectionCon, self.trackCon)
         self.mpDraw = mp.solutions.drawing_utils
-        # Contains ids of each fingertip
         self.fingertipIDS = [4, 8, 12, 16, 20]
 
     def findHands(self, img, draw=True):
@@ -25,35 +24,32 @@ class HandDetector():
                     self.mpDraw.draw_landmarks(img, handLms, self.mpHands.HAND_CONNECTIONS)
         return img
 
-    def findPosition(self, img, handNo=0, draw=True):
+    def findPosition(self, img, handNo=0, draw=True, drawbox=True):
         xList = []
         yList = []
-        handBox = []
         self.lmList = []
         if self.results.multi_hand_landmarks:
             myHand = self.results.multi_hand_landmarks[handNo]
-            for id, lm in enumerate(myHand.landmark):
-                # print(id, lm)
+            for id, landmark in enumerate(myHand.landmark):
                 height, width, colorChannel = img.shape
-                cx, cy = int(lm.x * width), int(lm.y * height)
-                # print(id, cx, cy)
-                xList.append(cx)
-                yList.append(cy)
-                self.lmList.append([id, cx, cy])
+                newx, newy = int(landmark.x * width), int(landmark.y * height)
+                xList.append(newx)
+                yList.append(newy)
+                self.lmList.append([id, newx, newy])
                 if draw:
-                    cv2.circle(img, (cx, cy), 5, (255, 0, 255), cv2.FILLED)
+                    cv2.circle(img, (newx, newy), 5, (255, 0, 255), cv2.FILLED)
             xMin, xMax = min(xList), max(xList)
             yMin, yMax = min(yList), max(yList)
-            handBox = xMin, yMin, xMax, yMax
-            if draw:
+            if drawbox:
                 cv2.rectangle(img, (xMin-20, yMin-20), (xMax+20, yMax+20), (0, 255, 0), 2)
-        return self.lmList, handBox
+
+        return self.lmList
 
     def fingersUp(self):
         fingers = []
 
         # Thumb Finger:
-        if self.lmList[self.fingertipIDS[0]][1] > self.lmList[self.fingertipIDS[0]-1][1]:
+        if self.lmList[self.fingertipIDS[0]][1] < self.lmList[self.fingertipIDS[0]-1][1]:
             fingers.append(1)
         else:
             fingers.append(0)
@@ -64,32 +60,29 @@ class HandDetector():
                 fingers.append(1)
             else:
                 fingers.append(0)
-        totalFingers = fingers.count(1)
-        print(totalFingers)
         return fingers
 
-    def findDistance(self, p1, p2, img, draw=True, r=15, t=3):
+    def findDistance(self, p1, p2, img, draw=True, r=5):
         x1, y1 = self.lmList[p1][1:]
         x2, y2 = self.lmList[p2][1:]
-        cx, cy = (x1+x2) // 2, (y1+y2) // 2
+        newx, newy = (x1+x2) // 2, (y1+y2) // 2
 
         if draw:
             cv2.line(img, (x1, y1), (x2, y2), (255, 0, 255)),
-            cv2.circle(img, (x1, y1), r, (255, 0, 255), cv2.FILLED)
-            cv2.circle(img, (x2, y2), r, (255, 0, 255), cv2.FILLED)
-            cv2.circle(img, (cx, cy), r, (0, 0, 255), cv2.FILLED)
+            cv2.circle(img, (x1, y1), r, (0, 0, 255), cv2.FILLED)
+            cv2.circle(img, (x2, y2), r, (0, 0, 255), cv2.FILLED)
+            cv2.circle(img, (newx, newy), r, (0, 0, 255), cv2.FILLED)
         length = math.hypot(x2-x1, y2-y1)
-        return length, img, [x1, y1, x2, y2, cx, cy]
+        return length, img, [x1, y1, x2, y2, newx, newy]
 
 def main():
     pTime = 0
-    cTime = 0
     cap = cv2.VideoCapture(0)
     detector = HandDetector()
     while True:
         success, img = cap.read()
         img = detector.findHands(img)
-        lmList, bbox = detector.findPosition(img)
+        lmList = detector.findPosition(img, drawbox=False)
         if len(lmList) != 0:
             print(lmList[4])
             fingers = detector.fingersUp()
